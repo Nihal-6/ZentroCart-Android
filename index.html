@@ -68,6 +68,11 @@ footer{background:#050505;border-top:1px solid #333;padding:25px 16px}.foot{max-
     <div class="sectionhead"><div><h2>Shop Our Collection</h2><p class="muted">Sample products — update names and prices before launch.</p></div>
       <div class="filters" aria-label="Product categories"><button class="active" data-filter="All">All</button><button data-filter="T-Shirts">T-Shirts</button><button data-filter="Shirts">Shirts</button><button data-filter="Jeans">Jeans</button><button data-filter="Hoodies">Hoodies</button></div>
     </div>
+    <div class="search-wrap" style="margin:18px 0 22px;max-width:520px">
+      <label for="productSearch" style="display:block;margin-bottom:8px;font-weight:700">Search products</label>
+      <input id="productSearch" type="search" placeholder="Search T-shirts, shirts, jeans..." autocomplete="off" style="width:100%;box-sizing:border-box;padding:14px 16px;border:1px solid #444;border-radius:12px;background:#151515;color:#fff;font:inherit;outline-color:#ffcc00">
+      <p id="searchResult" class="muted" aria-live="polite" style="margin:8px 0 0"></p>
+    </div>
     <div class="products">
       <article class="product" data-category="T-Shirts"><div class="art">👕</div><div class="body"><h3>Oversized T-Shirt</h3><p class="price">₹499</p><button class="add" type="button" data-product="Oversized T-Shirt — ₹499">Add to Order</button></div></article>
       <article class="product" data-category="Shirts"><div class="art">👔</div><div class="body"><h3>Casual Shirt</h3><p class="price">₹799</p><button class="add" type="button" data-product="Casual Shirt — ₹799">Add to Order</button></div></article>
@@ -83,7 +88,7 @@ footer{background:#050505;border-top:1px solid #333;padding:25px 16px}.foot{max-
         <div><label for="phone">Mobile number *</label><input id="phone" required inputmode="tel" placeholder="Your mobile number"></div>
         <div><label for="product">Product *</label><select id="product" required><option value="">Choose product</option><option>Oversized T-Shirt — ₹499</option><option>Casual Shirt — ₹799</option><option>Denim Jeans — ₹999</option><option>Hoodie — ₹899</option></select></div>
         <div><label for="size">Size *</label><select id="size" required><option value="">Choose size</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option><option>28</option><option>30</option><option>32</option><option>34</option><option>36</option><option>One size</option></select></div>
-        <div><label for="qty">Quantity *</label><input id="qty" type="number" min="1" max="20" value="1" required></div>
+        <div><label for="qty">Quantity *</label><input id="qty" type="number" min="1" max="5" step="1" value="1" required></div>
         <div><label for="payment">Payment preference *</label><select id="payment" required><option value="">Choose payment</option><option>UPI after confirmation</option><option>Cash on delivery, if available</option></select></div>
         <div class="wide"><label for="address">Delivery address *</label><textarea id="address" rows="3" required placeholder="House, street, town, state and PIN code"></textarea></div>
         <div class="wide"><label for="notes">Notes</label><textarea id="notes" rows="2" placeholder="Colour or other details"></textarea></div>
@@ -106,15 +111,30 @@ footer{background:#050505;border-top:1px solid #333;padding:25px 16px}.foot{max-
 (function(){
   const filterButtons = document.querySelectorAll('[data-filter]');
   const products = document.querySelectorAll('.product');
+  let activeCategory = 'All';
+  const searchInput = document.getElementById('productSearch');
+  const searchResult = document.getElementById('searchResult');
+  function updateProducts(){
+    const query = searchInput.value.trim().toLowerCase();
+    let shown = 0;
+    products.forEach(function(product){
+      const category = product.getAttribute('data-category') || '';
+      const searchableText = product.innerText.toLowerCase();
+      const categoryMatches = activeCategory === 'All' || category === activeCategory;
+      const searchMatches = !query || searchableText.includes(query);
+      product.hidden = !(categoryMatches && searchMatches);
+      if (!product.hidden) shown++;
+    });
+    searchResult.textContent = query ? (shown ? shown + ' product(s) found.' : 'No products found. Try another search.') : '';
+  }
   filterButtons.forEach(function(button){
     button.addEventListener('click', function(){
-      const category = button.getAttribute('data-filter');
+      activeCategory = button.getAttribute('data-filter');
       filterButtons.forEach(function(item){item.classList.toggle('active', item === button);});
-      products.forEach(function(product){
-        product.hidden = category !== 'All' && product.getAttribute('data-category') !== category;
-      });
+      updateProducts();
     });
   });
+  searchInput.addEventListener('input', updateProducts);
   document.querySelectorAll('[data-product]').forEach(function(button){
     button.addEventListener('click', function(){
       const select = document.getElementById('product');
@@ -125,8 +145,21 @@ footer{background:#050505;border-top:1px solid #333;padding:25px 16px}.foot{max-
       document.getElementById('order').scrollIntoView({behavior:'smooth'});
     });
   });
+  const quantityInput = document.getElementById('qty');
+  quantityInput.addEventListener('input', function(){
+    const value = Number(quantityInput.value);
+    if (value > 5) quantityInput.value = 5;
+    if (value < 1 && quantityInput.value !== '') quantityInput.value = 1;
+  });
   document.getElementById('orderForm').addEventListener('submit', function(event){
     event.preventDefault();
+    const quantity = Number(quantityInput.value);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 5) {
+      quantityInput.setCustomValidity('Please choose a quantity from 1 to 5.');
+      quantityInput.reportValidity();
+      quantityInput.setCustomValidity('');
+      return;
+    }
     const fields = [
       ['Name','name'],['Mobile','phone'],['Product','product'],['Size','size'],
       ['Quantity','qty'],['Payment preference','payment'],['Delivery address','address'],['Notes','notes']
