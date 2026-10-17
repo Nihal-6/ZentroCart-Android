@@ -88,13 +88,13 @@ footer{background:#050505;border-top:1px solid #333;padding:25px 16px}.foot{max-
         <div><label for="payment">Payment preference *</label><select id="payment" required><option value="">Choose payment</option><option>UPI after confirmation</option><option>Cash on delivery, if available</option></select></div>
         <div class="wide"><label for="address">Delivery address *</label><textarea id="address" rows="3" required placeholder="House, street, town, state and PIN code"></textarea></div>
         <div class="wide"><label for="notes">Notes</label><textarea id="notes" rows="2" placeholder="Colour or other details"></textarea></div>
-        <div class="wide"><button class="btn" type="submit">Download Order Request</button><p id="result" class="muted" aria-live="polite"></p></div>
+        <div class="wide"><button class="btn" type="submit">Send Order to WhatsApp</button><p id="result" class="muted" aria-live="polite"></p></div>
       </form>
     </section>
   </div>
 
   <section id="admin" class="panel" style="margin-top:32px">
-    <div class="sectionhead"><div><h2>Local Admin Panel</h2><p class="muted">Add products from this browser. This demo saves products only on this device.</p></div></div>
+    <div class="sectionhead"><div><h2>Local Product Admin Panel</h2><p class="muted">Products added here are stored only in this browser, not shared with customers on other devices.</p></div></div>
     <form id="adminForm" style="display:grid;gap:12px">
       <div><label for="adminName">Product name *</label><input id="adminName" required maxlength="80" placeholder="Example: Cotton T-Shirt"></div>
       <div><label for="adminPrice">Price (₹) *</label><input id="adminPrice" type="number" min="1" step="1" required placeholder="499"></div>
@@ -105,7 +105,7 @@ footer{background:#050505;border-top:1px solid #333;padding:25px 16px}.foot{max-
       <p id="adminResult" class="muted" aria-live="polite"></p>
     </form>
     <div style="margin-top:18px"><h3>Products added on this device</h3><div id="adminProductList" class="muted">No added products yet.</div></div>
-    <div class="note" style="margin-top:14px"><strong>Important:</strong> This is a local demo admin panel, not a secure live-store admin. Products added here are stored in this browser only; customers on other devices will not see them. Do not use it for private customer data or as a production inventory system.</div>
+    <div class="note" style="margin-top:14px"><strong>Important:</strong> Product management is still local to this browser. Customer orders can be sent to WhatsApp, and optionally recorded in a private Google Sheet after you configure the Apps Script URL. Test with your own phone first. Do not collect payment PINs, OTPs or card details.</div>
   </section>
 
   <section id="policies" style="margin-top:32px">
@@ -158,33 +158,56 @@ footer{background:#050505;border-top:1px solid #333;padding:25px 16px}.foot{max-
     document.getElementById('order').scrollIntoView({behavior:'smooth'});
   });
   const quantityInput = document.getElementById('qty');
-  document.getElementById('orderForm').addEventListener('submit', function(event){
+  // ORDER CONFIGURATION: replace these placeholders before publishing.
+  const WHATSAPP_NUMBER = '91YOURNUMBER'; // country code + phone digits, no + or spaces
+  const GOOGLE_APPS_SCRIPT_URL = 'PASTE_YOUR_DEPLOYED_WEB_APP_URL_HERE';
+  document.getElementById('orderForm').addEventListener('submit', async function(event){
     event.preventDefault();
-    const quantity = Number(quantityInput.value);
+    const quantity = Number(document.getElementById('qty').value);
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 5) {
       quantityInput.setCustomValidity('Please choose a quantity from 1 to 5.');
-      quantityInput.reportValidity();
-      quantityInput.setCustomValidity('');
+      quantityInput.reportValidity(); quantityInput.setCustomValidity(''); return;
+    }
+    const order = {
+      date: new Date().toISOString(),
+      name: document.getElementById('name').value.trim(),
+      phone: document.getElementById('phone').value.trim(),
+      product: document.getElementById('product').value,
+      size: document.getElementById('size').value,
+      quantity: quantity,
+      payment: document.getElementById('payment').value,
+      address: document.getElementById('address').value.trim(),
+      notes: document.getElementById('notes').value.trim()
+    };
+    const message = [
+      'NEW E-FASHION CART ORDER',
+      'Name: ' + order.name,
+      'Customer phone: ' + order.phone,
+      'Product: ' + order.product,
+      'Size: ' + order.size,
+      'Quantity: ' + order.quantity,
+      'Payment: ' + order.payment,
+      'Delivery address: ' + order.address,
+      'Notes: ' + (order.notes || 'None'),
+      'Please confirm stock, delivery fee and final total.'
+    ].join('\n');
+    const result = document.getElementById('result');
+    let sheetStatus = 'Google Sheets is not configured, so this order will only open WhatsApp.';
+    if (GOOGLE_APPS_SCRIPT_URL.startsWith('https://script.google.com/')) {
+      try {
+        await fetch(GOOGLE_APPS_SCRIPT_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(order)});
+        sheetStatus = 'Order submission was sent to the Google Sheets endpoint; verify that it appears in your private orders sheet.';
+      } catch (error) {
+        sheetStatus = 'Could not send to the orders sheet. WhatsApp will still open; verify setup before accepting orders.';
+      }
+    }
+    if (WHATSAPP_NUMBER === '91YOURNUMBER' || !/^\d{10,15}$/.test(WHATSAPP_NUMBER)) {
+      result.textContent = 'Setup needed: replace WHATSAPP_NUMBER in the code with your WhatsApp number (country code + digits). ' + sheetStatus;
       return;
     }
-    const fields = [
-      ['Name','name'],['Mobile','phone'],['Product','product'],['Size','size'],
-      ['Quantity','qty'],['Payment preference','payment'],['Delivery address','address'],['Notes','notes']
-    ];
-    const lines = ['E-Fashion Cart order request','Date: ' + new Date().toLocaleString()];
-    fields.forEach(function(field){
-      lines.push(field[0] + ': ' + document.getElementById(field[1]).value);
-    });
-    const blob = new Blob([lines.join('\n')], {type:'text/plain;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'efashion-cart-order.txt';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(function(){URL.revokeObjectURL(url);},1000);
-    document.getElementById('result').textContent = 'Order request downloaded. It has not been sent to the shop.';
+    result.textContent = 'Opening WhatsApp. Tap Send there to send your order. ' + sheetStatus;
+    const waUrl = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(message);
+    window.open(waUrl, '_blank', 'noopener');
   });
 
   // Local-only admin demo: products are stored in this browser's localStorage.
